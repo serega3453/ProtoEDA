@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import List
 from typing import Optional
 
 @dataclass(frozen=True)
@@ -11,6 +10,8 @@ class Coord:
         return Coord(self.x + other.x, self.y + other.y)
 
     def rotate(self, rotation: int) -> "Coord":
+        if not isinstance(rotation, int):
+            raise TypeError("rotation must be int")
         if rotation == 0:
             return self
         if rotation == 90:
@@ -19,7 +20,8 @@ class Coord:
             return Coord(-self.x, -self.y)
         if rotation == 270:
             return Coord(self.y, -self.x)
-        raise ValueError("invalid rotation")
+        raise ValueError("rotation must be one of 0, 90, 180, 270")
+
 
 @dataclass(frozen=True)
 class Pin:
@@ -28,15 +30,13 @@ class Pin:
 
 @dataclass(frozen=True)
 class Footprint:
-    pins: List[Pin]
+    pins: list[Pin]
 
-    def pins_at(self, origin: Coord, rotation: int) -> List[Coord]:
-        result = []
-        for pin in self.pins:
-            local = pin.offset.rotate(rotation)
-            world = origin.add(local)
-            result.append(world)
-        return result
+    def pins_at(self, origin: Coord, rotation: int) -> list[Coord]:
+        return [
+            origin.add(pin.offset.rotate(rotation))
+            for pin in self.pins
+        ]
 
 @dataclass
 class ComponentInstance:

@@ -1,35 +1,64 @@
-from typing import Iterable
 from model import Coord, ComponentInstance
 from grid import Grid
 
 OUTER_MARGIN = 40   # отступ в пикселях вокруг платы
 INNER_MARGIN = 20   # отступ в пикселях до рамки
-SCALE = 20      # размер клетки в пикселях
-R_HOLE = 3      # радиус отверстия
-R_PIN = 5       # радиус пина компонента
-BOX_PAD = 1  # визуальный отступ рамки внутрь, в пикселях
+SCALE = 20          # размер клетки в пикселях
+R_HOLE = 3          # радиус отверстия
+R_PIN = 5           # радиус пина компонента
+BOX_PAD = 1         # визуальный отступ рамки внутрь, в пикселях
 
-def render_component_boxes(f, components):
+
+# ---------- helpers ----------
+
+def grid_to_svg(coord: Coord) -> tuple[int, int]:
+    x = OUTER_MARGIN + INNER_MARGIN + coord.x * SCALE + SCALE // 2
+    y = OUTER_MARGIN + INNER_MARGIN + coord.y * SCALE + SCALE // 2
+    return x, y
+
+
+def extract_error_coords(errors: list[str]) -> set[Coord]:
+    coords: set[Coord] = set()
+    for e in errors:
+        if "Coord(" not in e:
+            continue
+        part = e.split("Coord(")[1].split(")")[0]
+        x, y = part.replace("x=", "").replace("y=", "").split(", ")
+        coords.add(Coord(int(x), int(y)))
+    return coords
+
+
+def component_bbox(comp: ComponentInstance) -> tuple[int, int, int, int] | None:
+    if comp.bbox is not None:
+        min_x, min_y, max_x, max_y = comp.bbox
+        return (
+            min_x + comp.origin.x,
+            min_y + comp.origin.y,
+            max_x + comp.origin.x,
+            max_y + comp.origin.y,
+        )
+
+    pins = comp.placed_pins()
+    if not pins:
+        return None
+
+    return (
+        min(p.x for p in pins),
+        min(p.y for p in pins),
+        max(p.x for p in pins),
+        max(p.y for p in pins),
+    )
+
+
+# ---------- render parts ----------
+
+def render_component_boxes(f, components: list[ComponentInstance]):
     for comp in components:
-        if comp.bbox is not None:
-            min_x, min_y, max_x, max_y = comp.bbox
-            # переносим bbox в мировые координаты
-            ox = comp.origin.x
-            oy = comp.origin.y
+        bbox = component_bbox(comp)
+        if bbox is None:
+            continue
 
-            min_x += ox
-            max_x += ox
-            min_y += oy
-            max_y += oy
-        else:
-            pins = comp.placed_pins()
-            if not pins:
-                continue
-
-            min_x = min(p.x for p in pins)
-            max_x = max(p.x for p in pins)
-            min_y = min(p.y for p in pins)
-            max_y = max(p.y for p in pins)
+        min_x, min_y, max_x, max_y = bbox
 
         x = OUTER_MARGIN + INNER_MARGIN + min_x * SCALE + BOX_PAD
         y = OUTER_MARGIN + INNER_MARGIN + min_y * SCALE + BOX_PAD
@@ -42,7 +71,8 @@ def render_component_boxes(f, components):
             f'stroke-dasharray="4,3"/>\n'
         )
 
-def render_refs(f, components):
+
+def render_refs(f, components: list[ComponentInstance]):
     for comp in components:
         tx = OUTER_MARGIN + INNER_MARGIN + comp.origin.x * SCALE + SCALE // 2
         ty = OUTER_MARGIN + INNER_MARGIN + comp.origin.y * SCALE - 6
@@ -54,31 +84,30 @@ def render_refs(f, components):
             f'font-family="monospace">{comp.ref}</text>\n'
         )
 
+
+# ---------- main render ----------
+
 def render_svg(
     grid: Grid,
     components: list[ComponentInstance],
     errors: list[str],
     filename: str = "board.svg",
 ):
-    # собираем координаты пинов с ошибками
-    error_coords: set[Coord] = set()
-    for e in errors:
-        if "Coord(" in e:
-            part = e.split("Coord(")[1].split(")")[0]
-            x, y = part.replace("x=", "").replace("y=", "").split(", ")
-            error_coords.add(Coord(int(x), int(y)))
+    error_coords = extract_error_coords(errors)
 
     width_px  = grid.width * SCALE + 2 * (OUTER_MARGIN + INNER_MARGIN)
     height_px = grid.height * SCALE + 2 * (OUTER_MARGIN + INNER_MARGIN)
 
     with open(filename, "w", encoding="utf-8") as f:
-        f.write(f'<svg xmlns="http://www.w3.org/2000/svg" '
-                f'width="{width_px}" height="{height_px}">\n')
+        f.write(
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{width_px}" height="{height_px}">\n'
+        )
 
         # фон
-        f.write(f'<rect width="100%" height="100%" fill="#1e1e1e"/>\n')
+        f.write('<rect width="100%" height="100%" fill="#1e1e1e"/>\n')
 
-        # рамки
+        # рамка платы
         board_x = OUTER_MARGIN
         board_y = OUTER_MARGIN
         board_w = grid.width * SCALE + 2 * INNER_MARGIN
@@ -105,15 +134,13 @@ def render_svg(
         # пины компонентов
         for comp in components:
             for pin in comp.placed_pins():
-                cx = OUTER_MARGIN + INNER_MARGIN + pin.x * SCALE + SCALE // 2
-                cy = OUTER_MARGIN + INNER_MARGIN + pin.y * SCALE + SCALE // 2
-
+                cx, cy = grid_to_svg(pin)
                 color = "#ff5555" if pin in error_coords else "#55ff55"
-
                 f.write(
                     f'<circle cx="{cx}" cy="{cy}" r="{R_PIN}" '
                     f'fill="{color}" fill-opacity="0.8"/>\n'
                 )
+
         render_refs(f, components)
 
         f.write("</svg>\n")

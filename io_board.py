@@ -1,43 +1,45 @@
 import yaml
+from typing import Mapping
 
-from model import Coord, ComponentInstance
+from model import Coord, ComponentInstance, Footprint
 from grid import Grid
 
-def load_board(path: str, footprints: dict):
+
+def load_board(path: str, footprints: Mapping[str, Footprint]):
     with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    # grid
     grid_def = data.get("grid")
     if not grid_def:
         raise ValueError("board.yaml missing 'grid' section")
 
     grid = Grid(
-        width=grid_def["width"],
-        height=grid_def["height"],
+        width=int(grid_def["width"]),
+        height=int(grid_def["height"]),
     )
 
-    # components
-    components = []
+    components: list[ComponentInstance] = []
 
     for c in data.get("components", []):
-        try:
-            fp_name = c["footprint"]
-            footprint = footprints[fp_name]
-        except KeyError:
-            raise ValueError(f"Unknown footprint '{c.get('footprint')}'")
+        for key in ("ref", "footprint", "x", "y"):
+            if key not in c:
+                raise ValueError(f"Component missing required field '{key}'")
+
+        fp_name = c["footprint"]
+        if fp_name not in footprints:
+            raise ValueError(f"Unknown footprint '{fp_name}'")
 
         bbox = None
         if "bbox" in c:
             b = c["bbox"]
             if len(b) != 4:
-                raise ValueError(f"Component '{c.get('ref')}': bbox must have 4 elements")
+                raise ValueError(f"Component '{c['ref']}': bbox must have 4 elements")
             bbox = tuple(int(v) for v in b)
 
         comp = ComponentInstance(
             ref=c["ref"],
-            footprint=footprint,
-            origin=Coord(c["x"], c["y"]),
+            footprint=footprints[fp_name],
+            origin=Coord(int(c["x"]), int(c["y"])),
             rotation=c.get("rotation", 0),
             bbox=bbox,
         )

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from model import Coord, ComponentInstance
-from typing import List
 
 @dataclass(frozen=True)
 class Grid:
