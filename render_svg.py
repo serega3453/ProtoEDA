@@ -1,6 +1,8 @@
 from model import Coord, ComponentInstance
 from grid import Grid
 
+# ---------- config ----------
+
 OUTER_MARGIN = 40   # отступ в пикселях вокруг платы
 INNER_MARGIN = 20   # отступ в пикселях до рамки
 SCALE = 20          # размер клетки в пикселях
@@ -8,12 +10,25 @@ R_HOLE = 3          # радиус отверстия
 R_PIN = 5           # радиус пина компонента
 BOX_PAD = 1         # визуальный отступ рамки внутрь, в пикселях
 
+COLOR_BG = "#1e1e1e"
+COLOR_BOARD = "#aaaaaa"
+COLOR_HOLE = "#555"
+COLOR_PIN_OK = "#55ff55"
+COLOR_PIN_ERR = "#ff5555"
+COLOR_BOX = "#888888"
+
 
 # ---------- helpers ----------
 
 def grid_to_svg(coord: Coord) -> tuple[int, int]:
     x = OUTER_MARGIN + INNER_MARGIN + coord.x * SCALE + SCALE // 2
     y = OUTER_MARGIN + INNER_MARGIN + coord.y * SCALE + SCALE // 2
+    return x, y
+
+
+def grid_cell_top_left(coord: Coord) -> tuple[int, int]:
+    x = OUTER_MARGIN + INNER_MARGIN + coord.x * SCALE
+    y = OUTER_MARGIN + INNER_MARGIN + coord.y * SCALE
     return x, y
 
 
@@ -50,32 +65,76 @@ def component_bbox(comp: ComponentInstance) -> tuple[int, int, int, int] | None:
     )
 
 
+def bbox_to_svg_rect(bbox: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    min_x, min_y, max_x, max_y = bbox
+    base_x, base_y = grid_cell_top_left(Coord(min_x, min_y))
+    x = base_x + BOX_PAD
+    y = base_y + BOX_PAD
+    w = (max_x - min_x + 1) * SCALE - 2 * BOX_PAD
+    h = (max_y - min_y + 1) * SCALE - 2 * BOX_PAD
+    return x, y, w, h
+
+
 # ---------- render parts ----------
+
+def render_background(f, width_px: int, height_px: int):
+    f.write(
+        f'<rect width="{width_px}" height="{height_px}" fill="{COLOR_BG}"/>\n'
+    )
+
+
+def render_board_frame(f, grid: Grid):
+    board_x = OUTER_MARGIN
+    board_y = OUTER_MARGIN
+    board_w = grid.width * SCALE + 2 * INNER_MARGIN
+    board_h = grid.height * SCALE + 2 * INNER_MARGIN
+
+    f.write(
+        f'<rect x="{board_x}" y="{board_y}" '
+        f'width="{board_w}" height="{board_h}" '
+        f'fill="none" stroke="{COLOR_BOARD}" stroke-width="2"/>\n'
+    )
+
+
+def render_board_holes(f, grid: Grid):
+    for y in range(grid.height):
+        for x in range(grid.width):
+            cx, cy = grid_to_svg(Coord(x, y))
+            f.write(
+                f'<circle cx="{cx}" cy="{cy}" r="{R_HOLE}" '
+                f'fill="{COLOR_HOLE}"/>\n'
+            )
+
 
 def render_component_boxes(f, components: list[ComponentInstance]):
     for comp in components:
         bbox = component_bbox(comp)
         if bbox is None:
             continue
-
-        min_x, min_y, max_x, max_y = bbox
-
-        x = OUTER_MARGIN + INNER_MARGIN + min_x * SCALE + BOX_PAD
-        y = OUTER_MARGIN + INNER_MARGIN + min_y * SCALE + BOX_PAD
-        w = (max_x - min_x + 1) * SCALE - 2 * BOX_PAD
-        h = (max_y - min_y + 1) * SCALE - 2 * BOX_PAD
+        x, y, w, h = bbox_to_svg_rect(bbox)
 
         f.write(
             f'<rect x="{x}" y="{y}" width="{w}" height="{h}" '
-            f'fill="none" stroke="#888888" stroke-width="1" '
+            f'fill="none" stroke="{COLOR_BOX}" stroke-width="1" '
             f'stroke-dasharray="4,3"/>\n'
         )
 
 
+def render_pins(f, components: list[ComponentInstance], error_coords: set[Coord]):
+    for comp in components:
+        for pin in comp.placed_pins():
+            cx, cy = grid_to_svg(pin)
+            color = COLOR_PIN_ERR if pin in error_coords else COLOR_PIN_OK
+            f.write(
+                f'<circle cx="{cx}" cy="{cy}" r="{R_PIN}" '
+                f'fill="{color}" fill-opacity="0.8"/>\n'
+            )
+
+
 def render_refs(f, components: list[ComponentInstance]):
     for comp in components:
-        tx = OUTER_MARGIN + INNER_MARGIN + comp.origin.x * SCALE + SCALE // 2
-        ty = OUTER_MARGIN + INNER_MARGIN + comp.origin.y * SCALE - 6
+        tx, ty = grid_to_svg(comp.origin)
+        ty -= 6
 
         f.write(
             f'<text x="{tx}" y="{ty}" '
@@ -104,43 +163,11 @@ def render_svg(
             f'width="{width_px}" height="{height_px}">\n'
         )
 
-        # фон
-        f.write('<rect width="100%" height="100%" fill="#1e1e1e"/>\n')
-
-        # рамка платы
-        board_x = OUTER_MARGIN
-        board_y = OUTER_MARGIN
-        board_w = grid.width * SCALE + 2 * INNER_MARGIN
-        board_h = grid.height * SCALE + 2 * INNER_MARGIN
-
-        f.write(
-            f'<rect x="{board_x}" y="{board_y}" '
-            f'width="{board_w}" height="{board_h}" '
-            f'fill="none" stroke="#aaaaaa" stroke-width="2"/>\n'
-        )
-
-        # дырки платы
-        for y in range(grid.height):
-            for x in range(grid.width):
-                cx = OUTER_MARGIN + INNER_MARGIN + x * SCALE + SCALE // 2
-                cy = OUTER_MARGIN + INNER_MARGIN + y * SCALE + SCALE // 2
-                f.write(
-                    f'<circle cx="{cx}" cy="{cy}" r="{R_HOLE}" '
-                    f'fill="#555"/>\n'
-                )
-
+        render_background(f, width_px, height_px)
+        render_board_frame(f, grid)
+        render_board_holes(f, grid)
         render_component_boxes(f, components)
-
-        # пины компонентов
-        for comp in components:
-            for pin in comp.placed_pins():
-                cx, cy = grid_to_svg(pin)
-                color = "#ff5555" if pin in error_coords else "#55ff55"
-                f.write(
-                    f'<circle cx="{cx}" cy="{cy}" r="{R_PIN}" '
-                    f'fill="{color}" fill-opacity="0.8"/>\n'
-                )
-
+        render_pins(f, components, error_coords)
         render_refs(f, components)
 
         f.write("</svg>\n")
