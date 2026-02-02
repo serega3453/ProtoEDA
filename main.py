@@ -2,6 +2,7 @@ from io_footprints import load_footprints
 from io_board import load_board
 from grid import check_placement
 from render_svg import render_svg
+from cli import run
 
 FOOTPRINTS_PATH = "footprints.yaml"
 BOARD_PATH = "board.yaml"
@@ -17,4 +18,4 @@ def main():
     render_svg(grid, components, errors)
 
 if __name__ == "__main__":
-    main()
+    run()

@@ -1,42 +1,44 @@
 grid:
   width: 24
   height: 10
-
 components:
-  - ref: U1
-    footprint: esp8266
-    x: 0
-    y: 2
-    rotation: 0
-    bbox: [0, -2, 11, 7]
-
-  - ref: U2
-    footprint: oled_4pin
-    x: 20
-    y: 0
-    rotation: 0
-    bbox: [0, 0, 3, 9]
-
-  - ref: SW1
-    footprint: button_4pin
-    x: 13
-    y: 0
-    rotation: 0
-
-  - ref: SW2
-    footprint: button_4pin
-    x: 16
-    y: 0
-    rotation: 0
-
-  - ref: SW3
-    footprint: button_4pin
-    x: 13
-    y: 3
-    rotation: 0
-
-  - ref: J1
-    footprint: header_3
-    x: 14
-    y: 8
-    rotation: 0
+- ref: U1
+  footprint: esp8266
+  x: 0
+  y: 2
+  rotation: 0
+  bbox:
+  - 0
+  - -2
+  - 11
+  - 7
+- ref: U2
+  footprint: oled_4pin
+  x: 20
+  y: 0
+  rotation: 0
+  bbox:
+  - 0
+  - 0
+  - 3
+  - 9
+- ref: SW1
+  footprint: button_4pin
+  x: 13
+  y: 0
+  rotation: 0
+- ref: SW2
+  footprint: button_4pin
+  x: 16
+  y: 0
+  rotation: 0
+- ref: SW3
+  footprint: button_4pin
+  x: 13
+  y: 3
+  rotation: 0
+- ref: J1
+  footprint: header_3
+  x: 14
+  y: 8
+  rotation: 0
