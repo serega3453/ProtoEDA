@@ -1,4 +1,4 @@
-from model import Coord, ComponentInstance
+from model import Coord, ComponentInstance, Jumper
 from grid import Grid
 
 # ---------- config ----------
@@ -16,6 +16,11 @@ COLOR_HOLE = "#555"
 COLOR_PIN_OK = "#55ff55"
 COLOR_PIN_ERR = "#ff5555"
 COLOR_BOX = "#888888"
+COLOR_JUMPER = "#ffaa00"
+JUMPER_WIDTH = 3
+COLOR_AXIS_TEXT = "#cccccc"
+AXIS_FONT_SIZE = 10
+AXIS_TICK = 6
 
 
 # ---------- helpers ----------
@@ -96,6 +101,41 @@ def render_board_frame(f, grid: Grid):
     )
 
 
+def render_axes(f, grid: Grid):
+    board_x = OUTER_MARGIN
+    board_y = OUTER_MARGIN
+    board_w = grid.width * SCALE + 2 * INNER_MARGIN
+    board_h = grid.height * SCALE + 2 * INNER_MARGIN
+
+    # Column labels (top)
+    for x in range(grid.width):
+        cx, _ = grid_to_svg(Coord(x, 0))
+        f.write(
+            f'<line x1="{cx}" y1="{board_y}" '
+            f'x2="{cx}" y2="{board_y - AXIS_TICK}" '
+            f'stroke="{COLOR_AXIS_TEXT}" stroke-width="1"/>\n'
+        )
+        f.write(
+            f'<text x="{cx}" y="{board_y - AXIS_TICK - 2}" '
+            f'fill="{COLOR_AXIS_TEXT}" font-size="{AXIS_FONT_SIZE}" '
+            f'text-anchor="middle" font-family="monospace">{x}</text>\n'
+        )
+
+    # Row labels (left)
+    for y in range(grid.height):
+        _, cy = grid_to_svg(Coord(0, y))
+        f.write(
+            f'<line x1="{board_x}" y1="{cy}" '
+            f'x2="{board_x - AXIS_TICK}" y2="{cy}" '
+            f'stroke="{COLOR_AXIS_TEXT}" stroke-width="1"/>\n'
+        )
+        f.write(
+            f'<text x="{board_x - AXIS_TICK - 2}" y="{cy + 3}" '
+            f'fill="{COLOR_AXIS_TEXT}" font-size="{AXIS_FONT_SIZE}" '
+            f'text-anchor="end" font-family="monospace">{y}</text>\n'
+        )
+
+
 def render_board_holes(f, grid: Grid):
     for y in range(grid.height):
         for x in range(grid.width):
@@ -131,6 +171,18 @@ def render_pins(f, components: list[ComponentInstance], error_coords: set[Coord]
             )
 
 
+def render_jumpers(f, jumpers: list[Jumper]):
+    for j in jumpers:
+        ax, ay = grid_to_svg(j.a)
+        bx, by = grid_to_svg(j.b)
+        color = j.color or COLOR_JUMPER
+        f.write(
+            f'<line x1="{ax}" y1="{ay}" x2="{bx}" y2="{by}" '
+            f'stroke="{color}" stroke-width="{JUMPER_WIDTH}" '
+            f'stroke-linecap="round"/>\n'
+        )
+
+
 def render_refs(f, components: list[ComponentInstance]):
     for comp in components:
         tx, ty = grid_to_svg(comp.origin)
@@ -150,6 +202,7 @@ def render_svg(
     grid: Grid,
     components: list[ComponentInstance],
     errors: list[str],
+    jumpers: list[Jumper] | None = None,
     filename: str = "board.svg",
 ):
     error_coords = extract_error_coords(errors)
@@ -165,8 +218,11 @@ def render_svg(
 
         render_background(f, width_px, height_px)
         render_board_frame(f, grid)
+        render_axes(f, grid)
         render_board_holes(f, grid)
         render_component_boxes(f, components)
+        if jumpers:
+            render_jumpers(f, jumpers)
         render_pins(f, components, error_coords)
         render_refs(f, components)
 

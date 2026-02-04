@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from model import Coord, ComponentInstance
+from model import Coord, ComponentInstance, Jumper
 
 @dataclass(frozen=True)
 class Grid:
@@ -31,4 +31,15 @@ def check_placement(grid: Grid, components: list[ComponentInstance]) -> list[str
             else:
                 occupied[pin] = comp.ref
 
+    return errors
+
+
+def check_jumpers(grid: Grid, jumpers: list[Jumper]) -> list[str]:
+    errors: list[str] = []
+    for j in jumpers:
+        for label, coord in (("a", j.a), ("b", j.b)):
+            if not grid.contains(coord):
+                errors.append(
+                    f"jumper {j.jid}: endpoint {label} outside grid at {coord}"
+                )
     return errors

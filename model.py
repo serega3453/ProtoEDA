@@ -48,6 +48,15 @@ class ComponentInstance:
 
     def placed_pins(self) -> list[Coord]:
         return self.footprint.pins_at(self.origin, self.rotation)
+
+
+@dataclass
+class Jumper:
+    jid: str
+    net: str
+    a: Coord
+    b: Coord
+    color: str
     
 def line_pins(
     start: Coord,

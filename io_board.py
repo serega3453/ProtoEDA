@@ -1,7 +1,8 @@
+import random
 import yaml
 from typing import Mapping
 
-from model import Coord, ComponentInstance, Footprint
+from model import Coord, ComponentInstance, Footprint, Jumper
 from grid import Grid
 
 
@@ -46,11 +47,34 @@ def load_board(path: str, footprints: Mapping[str, Footprint]):
 
         components.append(comp)
 
+    jumpers: list[Jumper] = []
+    for j in board_data.get("jumpers", []):
+        for key in ("id", "net", "a", "b"):
+            if key not in j:
+                raise ValueError(f"Jumper missing required field '{key}'")
+        a = j["a"]
+        b = j["b"]
+        if len(a) != 2 or len(b) != 2:
+            raise ValueError(f"Jumper '{j['id']}': a/b must be 2-element lists")
+        jumper = Jumper(
+            jid=str(j["id"]),
+            net=str(j["net"]),
+            a=Coord(int(a[0]), int(a[1])),
+            b=Coord(int(b[0]), int(b[1])),
+            color=str(j.get("color") or ""),
+        )
+        jumpers.append(jumper)
+
     # ВАЖНО: возвращаем board_data тоже
-    return board_data, grid, components
+    return board_data, grid, components, jumpers
 
 
-def save_board(path: str, board_data: dict, components: list[ComponentInstance]):
+def save_board(
+    path: str,
+    board_data: dict,
+    components: list[ComponentInstance],
+    jumpers: list[Jumper],
+):
     comps_by_ref = {c.ref: c for c in components}
 
     for c in board_data.get("components", []):
@@ -67,6 +91,26 @@ def save_board(path: str, board_data: dict, components: list[ComponentInstance])
             c["bbox"] = list(inst.bbox)
         else:
             c.pop("bbox", None)
+
+    board_data["jumpers"] = []
+    for j in jumpers:
+        color = j.color
+        if not color:
+            # Assign once on save to avoid re-randomizing across runs.
+            r = random.randint(64, 255)
+            g = random.randint(64, 255)
+            b = random.randint(64, 255)
+            color = f"#{r:02x}{g:02x}{b:02x}"
+            j.color = color
+        board_data["jumpers"].append(
+            {
+                "id": j.jid,
+                "net": j.net,
+                "a": [j.a.x, j.a.y],
+                "b": [j.b.x, j.b.y],
+                "color": color,
+            }
+        )
 
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(board_data, f, sort_keys=False)

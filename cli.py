@@ -1,10 +1,11 @@
 from dataclasses import dataclass
+import random
 
 from io_footprints import load_footprints
 from io_board import load_board, save_board
-from grid import check_placement
+from grid import check_placement, check_jumpers
 from render_svg import render_svg
-from model import Coord, ComponentInstance
+from model import Coord, ComponentInstance, Jumper
 
 
 FOOTPRINTS_PATH = "footprints.yaml"
@@ -15,6 +16,7 @@ class CLIState:
     board_data: dict
     grid: object
     components: list[ComponentInstance]
+    jumpers: list[Jumper]
     selected: ComponentInstance | None = None
 
 
@@ -25,6 +27,9 @@ def cmd_help(state: CLIState, parts: list[str]) -> bool:
     print("  move <dx> <dy>       - move selected component")
     print("  render               - render board.svg")
     print("  save                 - save board.yaml")
+    print("  jumper-list          - list jumpers")
+    print("  jumper-add <id> <net> <x1> <y1> <x2> <y2> [color]")
+    print("  jumper-del <id>")
     print("  quit                 - exit")
     return True
 
@@ -81,16 +86,71 @@ def cmd_move(state: CLIState, parts: list[str]) -> bool:
 
 def cmd_render(state: CLIState, parts: list[str]) -> bool:
     errors = check_placement(state.grid, state.components)
+    errors.extend(check_jumpers(state.grid, state.jumpers))
     for e in errors:
         print(e)
-    render_svg(state.grid, state.components, errors)
+    render_svg(state.grid, state.components, errors, state.jumpers)
     print("board.svg updated")
     return True
 
 
 def cmd_save(state: CLIState, parts: list[str]) -> bool:
-    save_board(BOARD_PATH, state.board_data, state.components)
+    save_board(BOARD_PATH, state.board_data, state.components, state.jumpers)
     print("board.yaml saved")
+    return True
+
+
+def cmd_jumper_list(state: CLIState, parts: list[str]) -> bool:
+    if not state.jumpers:
+        print("no jumpers")
+        return True
+    for j in state.jumpers:
+        print(f"{j.jid} {j.net}: {j.a} -> {j.b}")
+    return True
+
+
+def cmd_jumper_add(state: CLIState, parts: list[str]) -> bool:
+    if len(parts) not in (7, 8):
+        print("usage: jumper-add <id> <net> <x1> <y1> <x2> <y2> [color]")
+        return True
+    jid = parts[1]
+    if any(j.jid == jid for j in state.jumpers):
+        print(f"jumper '{jid}' already exists")
+        return True
+    net = parts[2]
+    try:
+        x1 = int(parts[3])
+        y1 = int(parts[4])
+        x2 = int(parts[5])
+        y2 = int(parts[6])
+    except ValueError:
+        print("x/y must be integers")
+        return True
+
+    if len(parts) == 8:
+        color = parts[7]
+    else:
+        r = random.randint(64, 255)
+        g = random.randint(64, 255)
+        b = random.randint(64, 255)
+        color = f"#{r:02x}{g:02x}{b:02x}"
+    jumper = Jumper(jid=jid, net=net, a=Coord(x1, y1), b=Coord(x2, y2), color=color)
+    state.jumpers.append(jumper)
+    print(f"jumper {jid} added")
+    return True
+
+
+def cmd_jumper_del(state: CLIState, parts: list[str]) -> bool:
+    if len(parts) != 2:
+        print("usage: jumper-del <id>")
+        return True
+    jid = parts[1]
+    before = len(state.jumpers)
+    state.jumpers = [j for j in state.jumpers if j.jid != jid]
+    if len(state.jumpers) == before:
+        print(f"jumper '{jid}' not found")
+    else:
+        print(f"jumper {jid} deleted")
     return True
 
 
@@ -100,11 +160,26 @@ def cmd_quit(state: CLIState, parts: list[str]) -> bool:
 
 def run():
     footprints = load_footprints(FOOTPRINTS_PATH)
-    board_data, grid, components = load_board(BOARD_PATH, footprints)
-    state = CLIState(board_data=board_data, grid=grid, components=components)
+    board_data, grid, components, jumpers = load_board(BOARD_PATH, footprints)
+    state = CLIState(
+        board_data=board_data,
+        grid=grid,
+        components=components,
+        jumpers=jumpers,
+    )
 
     print("ProtoBoard CLI")
     print("Type 'help' for commands")
+    print("Commands:")
+    print("  list                 - list components")
+    print("  select <ref>         - select component")
+    print("  move <dx> <dy>       - move selected component")
+    print("  render               - render board.svg")
+    print("  save                 - save board.yaml")
+    print("  jumper-list          - list jumpers")
+    print("  jumper-add <id> <net> <x1> <y1> <x2> <y2> [color]")
+    print("  jumper-del <id>")
+    print("  quit                 - exit")
 
     while True:
         try:
@@ -132,7 +207,15 @@ def run():
             cmd_render(state, parts)
         elif name == "save":
             cmd_save(state, parts)
-        elif name in ("quit", "exit"):
+        elif name == "jumper-list":
+            cmd_jumper_list(state, parts)
+        elif name == "jumper-add":
+            cmd_jumper_add(state, parts)
+            cmd_render(state, parts)
+        elif name == "jumper-del":
+            cmd_jumper_del(state, parts)
+            cmd_render(state, parts)
+        elif name in ("quit", "exit", "q"):
             cmd_quit(state, parts)
             print("bye")
             return
