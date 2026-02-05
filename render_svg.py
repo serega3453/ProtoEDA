@@ -25,15 +25,22 @@ AXIS_TICK = 6
 
 # ---------- helpers ----------
 
-def grid_to_svg(coord: Coord) -> tuple[int, int]:
-    x = OUTER_MARGIN + INNER_MARGIN + coord.x * SCALE + SCALE // 2
-    y = OUTER_MARGIN + INNER_MARGIN + coord.y * SCALE + SCALE // 2
+def _flip_coord(coord: Coord, grid: Grid) -> Coord:
+    """Mirror X across center of the grid (0..width-1)."""
+    return Coord(grid.width - 1 - coord.x, coord.y)
+
+
+def grid_to_svg(coord: Coord, grid: Grid, flip: bool = False) -> tuple[int, int]:
+    c = _flip_coord(coord, grid) if flip else coord
+    x = OUTER_MARGIN + INNER_MARGIN + c.x * SCALE + SCALE // 2
+    y = OUTER_MARGIN + INNER_MARGIN + c.y * SCALE + SCALE // 2
     return x, y
 
 
-def grid_cell_top_left(coord: Coord) -> tuple[int, int]:
-    x = OUTER_MARGIN + INNER_MARGIN + coord.x * SCALE
-    y = OUTER_MARGIN + INNER_MARGIN + coord.y * SCALE
+def grid_cell_top_left(coord: Coord, grid: Grid, flip: bool = False) -> tuple[int, int]:
+    c = _flip_coord(coord, grid) if flip else coord
+    x = OUTER_MARGIN + INNER_MARGIN + c.x * SCALE
+    y = OUTER_MARGIN + INNER_MARGIN + c.y * SCALE
     return x, y
 
 
@@ -70,9 +77,22 @@ def component_bbox(comp: ComponentInstance) -> tuple[int, int, int, int] | None:
     )
 
 
-def bbox_to_svg_rect(bbox: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+def view_bbox(bbox: tuple[int, int, int, int], grid: Grid, flip: bool) -> tuple[int, int, int, int]:
+    if not flip:
+        return bbox
     min_x, min_y, max_x, max_y = bbox
-    base_x, base_y = grid_cell_top_left(Coord(min_x, min_y))
+    return (
+        grid.width - 1 - max_x,
+        min_y,
+        grid.width - 1 - min_x,
+        max_y,
+    )
+
+
+def bbox_to_svg_rect(bbox: tuple[int, int, int, int], grid: Grid, flip: bool) -> tuple[int, int, int, int]:
+    min_x, min_y, max_x, max_y = view_bbox(bbox, grid, flip)
+    # view_bbox already mirrored if needed; avoid double-flip in pixel mapping
+    base_x, base_y = grid_cell_top_left(Coord(min_x, min_y), grid, False)
     x = base_x + BOX_PAD
     y = base_y + BOX_PAD
     w = (max_x - min_x + 1) * SCALE - 2 * BOX_PAD
@@ -101,7 +121,7 @@ def render_board_frame(f, grid: Grid):
     )
 
 
-def render_axes(f, grid: Grid):
+def render_axes(f, grid: Grid, flip: bool):
     board_x = OUTER_MARGIN
     board_y = OUTER_MARGIN
     board_w = grid.width * SCALE + 2 * INNER_MARGIN
@@ -109,7 +129,7 @@ def render_axes(f, grid: Grid):
 
     # Column labels (top)
     for x in range(grid.width):
-        cx, _ = grid_to_svg(Coord(x, 0))
+        cx, _ = grid_to_svg(Coord(x, 0), grid, flip)
         f.write(
             f'<line x1="{cx}" y1="{board_y}" '
             f'x2="{cx}" y2="{board_y - AXIS_TICK}" '
@@ -123,7 +143,7 @@ def render_axes(f, grid: Grid):
 
     # Row labels (left)
     for y in range(grid.height):
-        _, cy = grid_to_svg(Coord(0, y))
+        _, cy = grid_to_svg(Coord(0, y), grid, flip)
         f.write(
             f'<line x1="{board_x}" y1="{cy}" '
             f'x2="{board_x - AXIS_TICK}" y2="{cy}" '
@@ -136,22 +156,22 @@ def render_axes(f, grid: Grid):
         )
 
 
-def render_board_holes(f, grid: Grid):
+def render_board_holes(f, grid: Grid, flip: bool):
     for y in range(grid.height):
         for x in range(grid.width):
-            cx, cy = grid_to_svg(Coord(x, y))
+            cx, cy = grid_to_svg(Coord(x, y), grid, flip)
             f.write(
                 f'<circle cx="{cx}" cy="{cy}" r="{R_HOLE}" '
                 f'fill="{COLOR_HOLE}"/>\n'
             )
 
 
-def render_component_boxes(f, components: list[ComponentInstance]):
+def render_component_boxes(f, components: list[ComponentInstance], grid: Grid, flip: bool):
     for comp in components:
         bbox = component_bbox(comp)
         if bbox is None:
             continue
-        x, y, w, h = bbox_to_svg_rect(bbox)
+        x, y, w, h = bbox_to_svg_rect(bbox, grid, flip)
 
         f.write(
             f'<rect x="{x}" y="{y}" width="{w}" height="{h}" '
@@ -160,10 +180,10 @@ def render_component_boxes(f, components: list[ComponentInstance]):
         )
 
 
-def render_pins(f, components: list[ComponentInstance], error_coords: set[Coord]):
+def render_pins(f, components: list[ComponentInstance], grid: Grid, flip: bool, error_coords: set[Coord]):
     for comp in components:
         for pin in comp.placed_pins():
-            cx, cy = grid_to_svg(pin)
+            cx, cy = grid_to_svg(pin, grid, flip)
             color = COLOR_PIN_ERR if pin in error_coords else COLOR_PIN_OK
             f.write(
                 f'<circle cx="{cx}" cy="{cy}" r="{R_PIN}" '
@@ -171,10 +191,10 @@ def render_pins(f, components: list[ComponentInstance], error_coords: set[Coord]
             )
 
 
-def render_jumpers(f, jumpers: list[Jumper]):
+def render_jumpers(f, jumpers: list[Jumper], grid: Grid, flip: bool):
     for j in jumpers:
-        ax, ay = grid_to_svg(j.a)
-        bx, by = grid_to_svg(j.b)
+        ax, ay = grid_to_svg(j.a, grid, flip)
+        bx, by = grid_to_svg(j.b, grid, flip)
         color = j.color or COLOR_JUMPER
         f.write(
             f'<line x1="{ax}" y1="{ay}" x2="{bx}" y2="{by}" '
@@ -183,9 +203,9 @@ def render_jumpers(f, jumpers: list[Jumper]):
         )
 
 
-def render_refs(f, components: list[ComponentInstance]):
+def render_refs(f, components: list[ComponentInstance], grid: Grid, flip: bool):
     for comp in components:
-        tx, ty = grid_to_svg(comp.origin)
+        tx, ty = grid_to_svg(comp.origin, grid, flip)
         ty -= 6
 
         f.write(
@@ -204,6 +224,7 @@ def render_svg(
     errors: list[str],
     jumpers: list[Jumper] | None = None,
     filename: str = "board.svg",
+    flip: bool = False,
 ):
     error_coords = extract_error_coords(errors)
 
@@ -218,12 +239,13 @@ def render_svg(
 
         render_background(f, width_px, height_px)
         render_board_frame(f, grid)
-        render_axes(f, grid)
-        render_board_holes(f, grid)
-        render_component_boxes(f, components)
+        render_axes(f, grid, flip)
+        render_board_holes(f, grid, flip)
+
+        render_component_boxes(f, components, grid, flip)
         if jumpers:
-            render_jumpers(f, jumpers)
-        render_pins(f, components, error_coords)
-        render_refs(f, components)
+            render_jumpers(f, jumpers, grid, flip)
+        render_pins(f, components, grid, flip, error_coords)
+        render_refs(f, components, grid, flip)
 
         f.write("</svg>\n")

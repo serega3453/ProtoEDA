@@ -18,6 +18,7 @@ class CLIState:
     components: list[ComponentInstance]
     jumpers: list[Jumper]
     selected: ComponentInstance | None = None
+    flip: bool = False
 
 
 def cmd_help(state: CLIState, parts: list[str]) -> bool:
@@ -26,6 +27,7 @@ def cmd_help(state: CLIState, parts: list[str]) -> bool:
     print("  select <ref>         - select component")
     print("  move <dx> <dy>       - move selected component")
     print("  render               - render board.svg")
+    print("  flip                 - toggle board flip (view only)")
     print("  save                 - save board.yaml")
     print("  jumper-list          - list jumpers")
     print("  jumper-add <id> <net> <x1> <y1> <x2> <y2> [color]")
@@ -89,8 +91,16 @@ def cmd_render(state: CLIState, parts: list[str]) -> bool:
     errors.extend(check_jumpers(state.grid, state.jumpers))
     for e in errors:
         print(e)
-    render_svg(state.grid, state.components, errors, state.jumpers)
+    render_svg(state.grid, state.components, errors, state.jumpers, flip=state.flip)
     print("board.svg updated")
+    return True
+
+
+def cmd_flip(state: CLIState, parts: list[str]) -> bool:
+    state.flip = not state.flip
+    mode = "back" if state.flip else "front"
+    print(f"view mode: {mode} side")
+    cmd_render(state, parts)
     return True
 
 
@@ -175,6 +185,7 @@ def run():
     print("  select <ref>         - select component")
     print("  move <dx> <dy>       - move selected component")
     print("  render               - render board.svg")
+    print("  flip                 - toggle board flip (view only)")
     print("  save                 - save board.yaml")
     print("  jumper-list          - list jumpers")
     print("  jumper-add <id> <net> <x1> <y1> <x2> <y2> [color]")
@@ -205,6 +216,8 @@ def run():
             cmd_render(state, parts)
         elif name == "render":
             cmd_render(state, parts)
+        elif name == "flip":
+            cmd_flip(state, parts)
         elif name == "save":
             cmd_save(state, parts)
         elif name == "jumper-list":
