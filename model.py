@@ -57,6 +57,13 @@ class Jumper:
     a: Coord
     b: Coord
     color: str
+
+
+@dataclass
+class Trace:
+    tid: str
+    net: str
+    points: list[Coord]
     
 def line_pins(
     start: Coord,

@@ -2,7 +2,7 @@ import random
 import yaml
 from typing import Mapping
 
-from model import Coord, ComponentInstance, Footprint, Jumper
+from model import Coord, ComponentInstance, Footprint, Jumper, Trace
 from grid import Grid
 
 
@@ -65,8 +65,23 @@ def load_board(path: str, footprints: Mapping[str, Footprint]):
         )
         jumpers.append(jumper)
 
+    traces: list[Trace] = []
+    for t in board_data.get("traces", []):
+        for key in ("id", "net", "points"):
+            if key not in t:
+                raise ValueError(f"Trace missing required field '{key}'")
+        points = t["points"]
+        if not isinstance(points, list) or len(points) < 2:
+            raise ValueError(f"Trace '{t['id']}': points must be list of 2+ coords")
+        coords: list[Coord] = []
+        for p in points:
+            if len(p) != 2:
+                raise ValueError(f"Trace '{t['id']}': point must have 2 elements")
+            coords.append(Coord(int(p[0]), int(p[1])))
+        traces.append(Trace(tid=str(t["id"]), net=str(t["net"]), points=coords))
+
     # ВАЖНО: возвращаем board_data тоже
-    return board_data, grid, components, jumpers
+    return board_data, grid, components, jumpers, traces
 
 
 def save_board(
@@ -74,6 +89,7 @@ def save_board(
     board_data: dict,
     components: list[ComponentInstance],
     jumpers: list[Jumper],
+    traces: list[Trace],
 ):
     comps_by_ref = {c.ref: c for c in components}
 
@@ -111,6 +127,15 @@ def save_board(
                 "color": color,
             }
         )
+
+    board_data["traces"] = [
+        {
+            "id": t.tid,
+            "net": t.net,
+            "points": [[p.x, p.y] for p in t.points],
+        }
+        for t in traces
+    ]
 
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(board_data, f, sort_keys=False)

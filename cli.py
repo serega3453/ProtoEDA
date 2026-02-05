@@ -3,9 +3,9 @@ import random
 
 from io_footprints import load_footprints
 from io_board import load_board, save_board
-from grid import check_placement, check_jumpers
+from grid import check_placement, check_jumpers, check_traces
 from render_svg import render_svg
-from model import Coord, ComponentInstance, Jumper
+from model import Coord, ComponentInstance, Jumper, Trace
 
 
 FOOTPRINTS_PATH = "footprints.yaml"
@@ -17,6 +17,7 @@ class CLIState:
     grid: object
     components: list[ComponentInstance]
     jumpers: list[Jumper]
+    traces: list[Trace]
     selected: ComponentInstance | None = None
     flip: bool = False
 
@@ -32,6 +33,9 @@ def cmd_help(state: CLIState, parts: list[str]) -> bool:
     print("  jumper-list          - list jumpers")
     print("  jumper-add <id> <net> <x1> <y1> <x2> <y2> [color]")
     print("  jumper-del <id>")
+    print("  trace-list           - list traces")
+    print("  trace-add <id> <net> <x1> <y1> <x2> <y2> [<x3> <y3> ...]")
+    print("  trace-del <id>")
     print("  quit                 - exit")
     return True
 
@@ -89,9 +93,10 @@ def cmd_move(state: CLIState, parts: list[str]) -> bool:
 def cmd_render(state: CLIState, parts: list[str]) -> bool:
     errors = check_placement(state.grid, state.components)
     errors.extend(check_jumpers(state.grid, state.jumpers))
+    errors.extend(check_traces(state.grid, state.traces))
     for e in errors:
         print(e)
-    render_svg(state.grid, state.components, errors, state.jumpers, flip=state.flip)
+    render_svg(state.grid, state.components, errors, state.jumpers, state.traces, flip=state.flip)
     print("board.svg updated")
     return True
 
@@ -105,7 +110,7 @@ def cmd_flip(state: CLIState, parts: list[str]) -> bool:
 
 
 def cmd_save(state: CLIState, parts: list[str]) -> bool:
-    save_board(BOARD_PATH, state.board_data, state.components, state.jumpers)
+    save_board(BOARD_PATH, state.board_data, state.components, state.jumpers, state.traces)
     print("board.yaml saved")
     return True
 
@@ -164,18 +169,69 @@ def cmd_jumper_del(state: CLIState, parts: list[str]) -> bool:
     return True
 
 
+def cmd_trace_list(state: CLIState, parts: list[str]) -> bool:
+    if not state.traces:
+        print("no traces")
+        return True
+    for t in state.traces:
+        pts = " ".join(f"({p.x},{p.y})" for p in t.points)
+        print(f"{t.tid} {t.net}: {pts}")
+    return True
+
+
+def cmd_trace_add(state: CLIState, parts: list[str]) -> bool:
+    if len(parts) < 7 or (len(parts) - 3) % 2 != 0:
+        print("usage: trace-add <id> <net> <x1> <y1> <x2> <y2> [<x3> <y3> ...]")
+        return True
+    tid = parts[1]
+    if any(t.tid == tid for t in state.traces):
+        print(f"trace '{tid}' already exists")
+        return True
+    net = parts[2]
+    coords: list[Coord] = []
+    try:
+        for i in range(3, len(parts), 2):
+            x = int(parts[i])
+            y = int(parts[i + 1])
+            coords.append(Coord(x, y))
+    except ValueError:
+        print("x/y must be integers")
+        return True
+    if len(coords) < 2:
+        print("trace must have at least 2 points")
+        return True
+    state.traces.append(Trace(tid=tid, net=net, points=coords))
+    print(f"trace {tid} added")
+    return True
+
+
+def cmd_trace_del(state: CLIState, parts: list[str]) -> bool:
+    if len(parts) != 2:
+        print("usage: trace-del <id>")
+        return True
+    tid = parts[1]
+    before = len(state.traces)
+    state.traces = [t for t in state.traces if t.tid != tid]
+    if len(state.traces) == before:
+        print(f"trace '{tid}' not found")
+    else:
+        print(f"trace {tid} deleted")
+    return True
+
+
 def cmd_quit(state: CLIState, parts: list[str]) -> bool:
     return False
 
 
 def run():
     footprints = load_footprints(FOOTPRINTS_PATH)
-    board_data, grid, components, jumpers = load_board(BOARD_PATH, footprints)
+    board_data, grid, components, jumpers, traces = load_board(BOARD_PATH, footprints)
     state = CLIState(
         board_data=board_data,
         grid=grid,
         components=components,
         jumpers=jumpers,
+        traces=traces,
     )
 
     print("ProtoBoard CLI")
@@ -190,6 +246,9 @@ def run():
     print("  jumper-list          - list jumpers")
     print("  jumper-add <id> <net> <x1> <y1> <x2> <y2> [color]")
     print("  jumper-del <id>")
+    print("  trace-list           - list traces")
+    print("  trace-add <id> <net> <x1> <y1> <x2> <y2> [<x3> <y3> ...]")
+    print("  trace-del <id>")
     print("  quit                 - exit")
 
     while True:
@@ -227,6 +286,14 @@ def run():
             cmd_render(state, parts)
         elif name == "jumper-del":
             cmd_jumper_del(state, parts)
+            cmd_render(state, parts)
+        elif name == "trace-list":
+            cmd_trace_list(state, parts)
+        elif name == "trace-add":
+            cmd_trace_add(state, parts)
+            cmd_render(state, parts)
+        elif name == "trace-del":
+            cmd_trace_del(state, parts)
             cmd_render(state, parts)
         elif name in ("quit", "exit", "q"):
             cmd_quit(state, parts)

@@ -39,7 +39,7 @@ components:
   rotation: 0
 - ref: J1
   footprint: header_3
-  x: 14
+  x: 13
   y: 8
   rotation: 0
 jumpers:
@@ -50,23 +50,96 @@ jumpers:
   - 9
   b:
   - 21
-  - 0
+  - 9
   color: '#ff0000'
 - id: '1'
-  net: GND
-  a:
-  - 11
-  - 9
-  b:
-  - 20
-  - 0
-  color: '#0000ff'
-- id: '2'
   net: SDA
   a:
   - 11
   - 5
   b:
   - 23
-  - 0
-  color: '#ffffff'
+  - 5
+  color: '#ffff00'
+- id: '2'
+  net: SCL
+  a:
+  - 11
+  - 4
+  b:
+  - 22
+  - 4
+  color: '#0000ff'
+- id: '3'
+  net: TX
+  a:
+  - 11
+  - 2
+  b:
+  - 13
+  - 8
+  color: '#ffa500'
+- id: '4'
+  net: RX
+  a:
+  - 11
+  - 3
+  b:
+  - 14
+  - 8
+  color: '#00ffff'
+traces:
+- id: '0'
+  net: GND
+  points:
+  - - 11
+    - 9
+  - - 20
+    - 9
+  - - 20
+    - 0
+- id: '1'
+  net: GND
+  points:
+  - - 15
+    - 0
+  - - 15
+    - 2
+  - - 15
+    - 3
+  - - 15
+    - 5
+  - - 15
+    - 8
+  - - 15
+    - 9
+- id: '2'
+  net: GND
+  points:
+  - - 20
+    - 0
+  - - 18
+    - 0
+  - - 18
+    - 2
+- id: '3'
+  net: VCC
+  points:
+  - - 21
+    - 9
+  - - 21
+    - 0
+- id: '4'
+  net: SDA
+  points:
+  - - 23
+    - 0
+  - - 23
+    - 5
+- id: '5'
+  net: SCL
+  points:
+  - - 22
+    - 0
+  - - 22
+    - 4

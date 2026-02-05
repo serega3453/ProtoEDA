@@ -1,4 +1,4 @@
-from model import Coord, ComponentInstance, Jumper
+from model import Coord, ComponentInstance, Jumper, Trace
 from grid import Grid
 
 # ---------- config ----------
@@ -18,6 +18,10 @@ COLOR_PIN_ERR = "#ff5555"
 COLOR_BOX = "#888888"
 COLOR_JUMPER = "#ffaa00"
 JUMPER_WIDTH = 3
+JUMPER_ARC_OFFSET = 24
+JUMPER_DASH = "6,4"
+COLOR_TRACE = "#33aaff"
+TRACE_WIDTH = 3
 COLOR_AXIS_TEXT = "#cccccc"
 AXIS_FONT_SIZE = 10
 AXIS_TICK = 6
@@ -196,10 +200,48 @@ def render_jumpers(f, jumpers: list[Jumper], grid: Grid, flip: bool):
         ax, ay = grid_to_svg(j.a, grid, flip)
         bx, by = grid_to_svg(j.b, grid, flip)
         color = j.color or COLOR_JUMPER
+        if ax == bx and ay == by:
+            # Degenerate case: draw a small loop.
+            r = JUMPER_ARC_OFFSET // 2
+            f.write(
+                f'<circle cx="{ax}" cy="{ay}" r="{r}" '
+                f'fill="none" stroke="{color}" stroke-width="{JUMPER_WIDTH}" '
+                f'stroke-dasharray="{JUMPER_DASH}"/>\n'
+            )
+            continue
+
+        # Quadratic Bezier with control point offset perpendicular to the segment.
+        mx = (ax + bx) / 2
+        my = (ay + by) / 2
+        dx = bx - ax
+        dy = by - ay
+        length = (dx * dx + dy * dy) ** 0.5
+        if length == 0:
+            length = 1
+        nx = -dy / length
+        ny = dx / length
+        offset = min(JUMPER_ARC_OFFSET, length * 0.3)
+        cx = mx + nx * offset
+        cy = my + ny * offset
         f.write(
-            f'<line x1="{ax}" y1="{ay}" x2="{bx}" y2="{by}" '
-            f'stroke="{color}" stroke-width="{JUMPER_WIDTH}" '
-            f'stroke-linecap="round"/>\n'
+            f'<path d="M {ax} {ay} Q {cx:.1f} {cy:.1f} {bx} {by}" '
+            f'fill="none" stroke="{color}" stroke-width="{JUMPER_WIDTH}" '
+            f'stroke-linecap="round" stroke-dasharray="{JUMPER_DASH}"/>\n'
+        )
+
+def render_traces(f, traces: list[Trace], grid: Grid, flip: bool):
+    for t in traces:
+        if len(t.points) < 2:
+            continue
+        pts = []
+        for p in t.points:
+            x, y = grid_to_svg(p, grid, flip)
+            pts.append(f"{x},{y}")
+        points_attr = " ".join(pts)
+        f.write(
+            f'<polyline points="{points_attr}" '
+            f'fill="none" stroke="{COLOR_TRACE}" '
+            f'stroke-width="{TRACE_WIDTH}" stroke-linecap="round"/>\n'
         )
 
 
@@ -223,6 +265,7 @@ def render_svg(
     components: list[ComponentInstance],
     errors: list[str],
     jumpers: list[Jumper] | None = None,
+    traces: list[Trace] | None = None,
     filename: str = "board.svg",
     flip: bool = False,
 ):
@@ -243,6 +286,8 @@ def render_svg(
         render_board_holes(f, grid, flip)
 
         render_component_boxes(f, components, grid, flip)
+        if traces:
+            render_traces(f, traces, grid, flip)
         if jumpers:
             render_jumpers(f, jumpers, grid, flip)
         render_pins(f, components, grid, flip, error_coords)
